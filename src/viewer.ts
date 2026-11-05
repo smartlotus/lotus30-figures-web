@@ -1,7 +1,7 @@
 import {
   AmbientLight, Box3, CanvasTexture, CylinderGeometry, DirectionalLight, Group, HemisphereLight, LinearFilter, MathUtils, Mesh, MeshBasicMaterial,
   MeshStandardMaterial, NeutralToneMapping, Object3D, PCFShadowMap, PerspectiveCamera, PlaneGeometry, PMREMGenerator, Scene, SRGBColorSpace,
-  Vector3, WebGLRenderer,
+  Vector3, WebGLRenderer, Matrix4, Color,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
@@ -100,9 +100,14 @@ export class Viewer {
       p = this.loader.loadAsync(modelUrl(id, ver)).then((g) => {
         const scene = g.scene;
         const flat = ver === 'pixel';
+        // the GLBs come straight from 3MF: Z = print-up. Figures stand on Y (rotate); reliefs already face the camera (+Z).
+        if (id.endsWith('-fig')) { const rx = new Matrix4().makeRotationX(-Math.PI / 2); [...scene.children].forEach((c) => c.applyMatrix4(rx)); scene.updateMatrixWorld(true); }
         scene.traverse((o) => {
           const m = o as Mesh; if (!m.isMesh) return;
           m.castShadow = m.receiveShadow = true;
+          // one shared material in the file; the filament colour lives in the part name (NN_rrggbb) -> own material per part
+          const hex = /_([0-9a-f]{6})$/i.exec(m.name)?.[1];
+          if (hex) { m.material = (m.material as MeshStandardMaterial).clone(); (m.material as MeshStandardMaterial).color = new Color(`#${hex}`); }
           const mat = m.material as MeshStandardMaterial;
           mat.roughness = flat ? 0.68 : 0.4; mat.metalness = 0; mat.envMapIntensity = flat ? 0.9 : 1.05;
           m.name = m.name || mat.name;
